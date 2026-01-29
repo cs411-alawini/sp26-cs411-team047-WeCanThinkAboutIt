@@ -8,8 +8,8 @@
 | TeamName    |   WeCanThinkAboutIt    |
 | Captain     |       Ocean Ng         |
 | Captain     |  oceanng2@illinois.edu |
-| Member1     |       Yasu             |
-| Member1     |  yasuru32@illinois.edu |
+| Member1     |       Yash Asuru       |
+| Member1     |  yasuru3@illinois.edu  |
 | Member2     |                        |
 | Member2     |                        |
 | Member3     |                        |
