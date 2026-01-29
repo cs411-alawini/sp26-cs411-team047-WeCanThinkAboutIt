@@ -4,14 +4,14 @@
 
 |   Info      |        Description     |
 | ----------- | ---------------------- |
-| TeamID      |        Team-000        |
-| TeamName    |         sample         |
-| Captain     |       Abdu Alawini     |
-| Captain     |  alawini@illinois.edu  |
-| Member1     |  Shadman Saqib Eusuf   |
-| Member1     |  seusuf2@illinois.edu  |
-| Member2     |     Aryaman Nasare     |
-| Member2     |  nasare2@illinois.edu  |
+| TeamID      |        Team-047        |
+| TeamName    |   WeCanThinkAboutIt    |
+| Captain     |       Ocean Ng         |
+| Captain     |  oceanng2@illinois.edu |
+| Member1     |       Yasu             |
+| Member1     |  yasuru32@illinois.edu |
+| Member2     |                        |
+| Member2     |                        |
 | Member3     |                        |
 | Member3     |                        |
 
