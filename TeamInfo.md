@@ -10,8 +10,8 @@
 | Captain     |  oceanng2@illinois.edu |
 | Member1     |       Yash Asuru       |
 | Member1     |  yasuru3@illinois.edu  |
-| Member2     |                        |
-| Member2     |                        |
+| Member2     |    Jack Liu            |
+| Member2     |  zliu134@illinoisldu   |
 | Member3     |                        |
 | Member3     |                        |
 
