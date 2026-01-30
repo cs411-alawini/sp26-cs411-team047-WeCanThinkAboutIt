@@ -1,4 +1,4 @@
-# team000-sample
+# team047-WeCanThinkAboutIt
 
 ## Basic Information
 
