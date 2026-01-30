@@ -12,8 +12,8 @@
 | Member1     |  yasuru3@illinois.edu  |
 | Member2     |    Jack Liu            |
 | Member2     |  zliu134@illinoisldu   |
-| Member3     |                        |
-| Member3     |                        |
+| Member3     |    Jacob Kantayya      |
+| Member3     |  jacobk8@illinois.edu  |
 
 ## Project Information
 
