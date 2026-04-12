@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GradPath – Career Dashboard</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+</head>
+<body>
+
+  <!-- =====================================================================
+       NAVIGATION BAR
+       ===================================================================== -->
+  <nav class="navbar">
+    <div class="nav-brand">
+      <i class="fa-solid fa-graduation-cap"></i>
+      <span>GradPath</span>
+    </div>
+
+    <div class="nav-center">
+      {% if not profile %}
+      <!-- Quick email login from the dashboard when no session is active -->
+      <form class="nav-login-form" action="/login" method="POST">
+        <input type="email" name="email" placeholder="Enter your email to log in" required />
+        <button type="submit" class="btn btn-outline-white btn-sm">Log In</button>
+      </form>
+      {% else %}
+      <span class="nav-user-greeting">
+        <i class="fa-solid fa-circle-user"></i>
+        {{ profile.email }}
+      </span>
+      {% endif %}
+    </div>
+
+    <div class="nav-actions">
+      {% if profile %}
+        <a href="{{ url_for('logout') }}" class="btn btn-outline-white btn-sm">
+          <i class="fa-solid fa-right-from-bracket"></i> Logout
+        </a>
+      {% endif %}
+      <a href="{{ url_for('profile') }}" class="btn btn-outline-white btn-sm" title="Profile settings">
+        <i class="fa-solid fa-user-pen"></i> Profile
+      </a>
+    </div>
+  </nav>
+
+  <!-- =====================================================================
+       FLASH MESSAGES
+       ===================================================================== -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-container">
+        {% for category, message in messages %}
+          <div class="flash flash-{{ category }}">
+            <i class="fa-solid
+              {% if category == 'success' %}fa-circle-check
+              {% elif category == 'error' %}fa-circle-xmark
+              {% else %}fa-circle-info{% endif %}"></i>
+            {{ message }}
+            <button class="flash-close" onclick="this.parentElement.remove()">×</button>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <!-- =====================================================================
+       SEARCH & FILTER BAR  (single inline row)
+       ===================================================================== -->
+  <section class="search-section">
+    <form class="search-form" action="{{ url_for('index') }}" method="GET" id="searchForm">
+
+      <!-- Search input -->
+      <div class="search-input-wrap">
+        <i class="fa-solid fa-magnifying-glass search-icon"></i>
+        <input
+          type="text"
+          name="q"
+          id="searchInput"
+          class="search-input"
+          placeholder="Search job titles or industries…"
+          value="{{ search_query }}"
+          autocomplete="off"
+        />
+        <!-- Live-search autocomplete dropdown -->
+        <div class="search-dropdown" id="searchDropdown"></div>
+      </div>
+
+      <!-- Inline filter dropdowns -->
+      <div class="filter-inline">
+        <select name="major" class="filter-select" title="Filter by major">
+          <option value="">Major</option>
+          {% for m in majors %}
+            <option value="{{ m.major_name }}"
+              {% if major_filter == m.major_name %}selected{% endif %}>
+              {{ m.major_name }}
+            </option>
+          {% endfor %}
+        </select>
+
+        <select name="year" class="filter-select" title="Filter by graduation year">
+          <option value="">Year</option>
+          {% for yr in range(2024, 2031) %}
+            <option value="{{ yr }}"
+              {% if year_filter == yr|string %}selected{% endif %}>{{ yr }}</option>
+          {% endfor %}
+        </select>
+
+        <select name="category" class="filter-select" title="Filter by category">
+          <option value="">Category</option>
+          {% for cat in categories %}
+            <option value="{{ cat }}"
+              {% if category_filter == cat %}selected{% endif %}>{{ cat }}</option>
+          {% endfor %}
+        </select>
+
+        <select name="degree" class="filter-select" title="Filter by degree">
+          <option value="">Degree</option>
+          <option value="Associate"  {% if degree_filter == "Associate"  %}selected{% endif %}>Associate</option>
+          <option value="Bachelor's" {% if degree_filter == "Bachelor's" %}selected{% endif %}>Bachelor's</option>
+          <option value="Master's"   {% if degree_filter == "Master's"   %}selected{% endif %}>Master's</option>
+          <option value="PhD"        {% if degree_filter == "PhD"        %}selected{% endif %}>PhD</option>
+        </select>
+
+        <button type="submit" class="btn btn-primary search-btn">
+          <i class="fa-solid fa-search"></i> Search
+        </button>
+
+        {% if search_query or major_filter or year_filter or category_filter or degree_filter %}
+        <a href="{{ url_for('index') }}" class="btn btn-ghost btn-sm" title="Clear filters">
+          <i class="fa-solid fa-xmark"></i> Clear
+        </a>
+        {% endif %}
+      </div>
+
+    </form>
+  </section>
+
+  <!-- =====================================================================
+       MAIN CONTENT – 30 / 70 two-column layout
+       ===================================================================== -->
+  <main class="main-content">
+
+    <!-- =================================================================
+         LEFT COLUMN – Profile card  +  Preference Settings panel
+         ================================================================= -->
+    <aside class="left-col">
+
+      <!-- ------- PROFILE CARD ------- -->
+      <div class="profile-card">
+        <div class="profile-card-header">
+          <div class="profile-avatar">
+            <i class="fa-solid fa-user-graduate"></i>
+          </div>
+          <div class="profile-card-title">
+            <h2>My Profile</h2>
+            {% if profile %}
+              <p class="profile-email">{{ profile.email }}</p>
+            {% else %}
+              <p class="profile-empty-hint">No profile loaded</p>
+            {% endif %}
+          </div>
+        </div>
+
+        {% if profile %}
+        <!-- Profile fields: label | value | edit | delete -->
+        <div class="profile-fields">
+
+          <div class="profile-field">
+            <span class="field-label"><i class="fa-solid fa-envelope"></i> Email</span>
+            <span class="field-value">{{ profile.email or '—' }}</span>
+            <a href="{{ url_for('profile') }}" class="field-btn field-edit" title="Edit">
+              <i class="fa-solid fa-pen-to-square"></i>
+            </a>
+            <a href="{{ url_for('profile') }}" class="field-btn field-delete" title="Delete profile">
+              <i class="fa-solid fa-trash-can"></i>
+            </a>
+          </div>
+
+          <div class="profile-field">
+            <span class="field-label"><i class="fa-solid fa-book"></i> Major</span>
+            <span class="field-value">{{ profile.major_name or '—' }}</span>
+            <a href="{{ url_for('profile') }}" class="field-btn field-edit" title="Edit">
+              <i class="fa-solid fa-pen-to-square"></i>
+            </a>
+            <a href="{{ url_for('profile') }}" class="field-btn field-delete" title="Delete profile">
+              <i class="fa-solid fa-trash-can"></i>
+            </a>
+          </div>
+
+          <div class="profile-field">
+            <span class="field-label"><i class="fa-solid fa-university"></i> College</span>
+            <span class="field-value">{{ profile.university_name or '—' }}</span>
+            <a href="{{ url_for('profile') }}" class="field-btn field-edit" title="Edit">
+              <i class="fa-solid fa-pen-to-square"></i>
+            </a>
+            <a href="{{ url_for('profile') }}" class="field-btn field-delete" title="Delete profile">
+              <i class="fa-solid fa-trash-can"></i>
+            </a>
+          </div>
+
+          <div class="profile-field">
+            <span class="field-label"><i class="fa-solid fa-calendar"></i> Grad Year</span>
+            <span class="field-value">{{ profile.grad_year or '—' }}</span>
+            <a href="{{ url_for('profile') }}" class="field-btn field-edit" title="Edit">
+              <i class="fa-solid fa-pen-to-square"></i>
+            </a>
+            <a href="{{ url_for('profile') }}" class="field-btn field-delete" title="Delete profile">
+              <i class="fa-solid fa-trash-can"></i>
+            </a>
+          </div>
+
+          <div class="profile-field">
+            <span class="field-label"><i class="fa-solid fa-certificate"></i> Degree</span>
+            <span class="field-value">{{ profile.degree_level or '—' }}</span>
+            <a href="{{ url_for('profile') }}" class="field-btn field-edit" title="Edit">
+              <i class="fa-solid fa-pen-to-square"></i>
+            </a>
+            <a href="{{ url_for('profile') }}" class="field-btn field-delete" title="Delete profile">
+              <i class="fa-solid fa-trash-can"></i>
+            </a>
+          </div>
+
+          <div class="profile-field">
+            <span class="field-label"><i class="fa-solid fa-location-dot"></i> Location</span>
+            <span class="field-value">{{ location_name or '—' }}</span>
+            <a href="{{ url_for('profile') }}" class="field-btn field-edit" title="Edit">
+              <i class="fa-solid fa-pen-to-square"></i>
+            </a>
+            <a href="{{ url_for('profile') }}" class="field-btn field-delete" title="Delete profile">
+              <i class="fa-solid fa-trash-can"></i>
+            </a>
+          </div>
+
+        </div>
+
+        <div class="profile-card-footer">
+          <a href="{{ url_for('profile') }}" class="btn btn-primary btn-full">
+            <i class="fa-solid fa-user-pen"></i> Edit Full Profile
+          </a>
+        </div>
+
+        {% else %}
+        <!-- No profile loaded – prompt to create one -->
+        <div class="profile-empty">
+          <i class="fa-solid fa-user-plus profile-empty-icon"></i>
+          <p>Create a profile to get personalised job recommendations.</p>
+          <a href="{{ url_for('profile') }}" class="btn btn-primary btn-full">
+            <i class="fa-solid fa-plus"></i> Create Profile
+          </a>
+        </div>
+        {% endif %}
+      </div><!-- /.profile-card -->
+
+      <!-- ------- PREFERENCE SETTINGS PANEL ------- -->
+      {% if profile %}
+      <div class="pref-panel">
+        <div class="pref-panel-header">
+          <i class="fa-solid fa-sliders"></i>
+          <span>Preference Settings</span>
+        </div>
+
+        <form action="{{ url_for('create_preset') }}" method="POST" class="pref-form">
+          <div class="pref-field">
+            <label><i class="fa-solid fa-dollar-sign"></i> Expected Salary</label>
+            <input type="number" name="expected_salary" class="pref-input"
+                   placeholder="e.g. 70000" min="0" />
+          </div>
+
+          <div class="pref-field">
+            <label><i class="fa-solid fa-chart-line"></i> Max Unemployment %</label>
+            <input type="number" name="max_unemployment" class="pref-input"
+                   placeholder="e.g. 5.0" min="0" max="100" step="0.1" />
+          </div>
+
+          <div class="pref-field">
+            <label><i class="fa-solid fa-industry"></i> Preferred Industry</label>
+            <select name="industry_id" class="pref-input">
+              <option value="">— Any Industry —</option>
+              {% for ind in industries %}
+                <option value="{{ ind.industry_ID }}">{{ ind.industry_name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="pref-field">
+            <label><i class="fa-solid fa-location-dot"></i> Preferred State</label>
+            <select name="state_id" class="pref-input" id="stateSelect">
+              <option value="">— Any State —</option>
+              {% for s in states %}
+                <option value="{{ s.state_ID }}">{{ s.state_name }}</option>
+              {% endfor %}
+            </select>
+            <!-- Populated by JS when a state is selected -->
+            <span class="pref-hint" id="unemploymentHint"></span>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-full pref-save-btn">
+            <i class="fa-solid fa-floppy-disk"></i> Save Preferences
+          </button>
+        </form>
+      </div><!-- /.pref-panel -->
+      {% endif %}
+
+    </aside><!-- /.left-col -->
+
+    <!-- =================================================================
+         RIGHT COLUMN – Job Recommendations Table
+         ================================================================= -->
+    <section class="jobs-section">
+      <div class="jobs-header">
+        <h2>
+          <i class="fa-solid fa-briefcase"></i>
+          Job Recommendations
+          {% if search_query %}
+            <span class="search-tag">
+              "{{ search_query }}"
+              <a href="{{ url_for('index') }}" class="remove-tag" title="Remove">×</a>
+            </span>
+          {% endif %}
+        </h2>
+        <span class="jobs-count">
+          {{ jobs|length }} result{% if jobs|length != 1 %}s{% endif %}
+        </span>
+      </div>
+
+      {% if jobs %}
+      <div class="table-wrapper">
+        <table class="jobs-table">
+          <thead>
+            <tr>
+              <th class="col-rank">Rank</th>
+              <th class="col-title">Major / Field of Study</th>
+              <th class="col-industry">Category</th>
+              <th class="col-salary">Median Salary</th>
+              <th class="col-unemp">Unemployment</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for job in jobs %}
+            <tr class="job-row">
+              <td class="col-rank">
+                {% if loop.index == 1 %}
+                  <span class="rank-badge rank-1">
+                    <i class="fa-solid fa-trophy"></i> 1
+                  </span>
+                {% elif loop.index == 2 %}
+                  <span class="rank-badge rank-2">
+                    <i class="fa-solid fa-medal"></i> 2
+                  </span>
+                {% elif loop.index == 3 %}
+                  <span class="rank-badge rank-3">
+                    <i class="fa-solid fa-award"></i> 3
+                  </span>
+                {% else %}
+                  <span class="rank-number">{{ loop.index }}</span>
+                {% endif %}
+              </td>
+
+              <td class="col-title">
+                <span class="job-title">{{ job.major }}</span>
+              </td>
+
+              <td class="col-industry">
+                <span class="industry-tag">{{ job.major_category }}</span>
+              </td>
+
+              <td class="col-salary">
+                {% if job.median_salary %}
+                  ${{ "{:,.0f}".format(job.median_salary) }}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+
+              <td class="col-unemp">
+                {% if job.unemployment_rate is not none %}
+                  {{ "%.1f"|format(job.unemployment_rate * 100) }}%
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {% else %}
+      <div class="jobs-empty">
+        <i class="fa-solid fa-magnifying-glass jobs-empty-icon"></i>
+        <h3>No results found</h3>
+        <p>Try a different keyword or clear your filters.</p>
+      </div>
+      {% endif %}
+    </section><!-- /.jobs-section -->
+
+  </main>
+
+  <!-- =====================================================================
+       FOOTER
+       ===================================================================== -->
+  <footer class="footer">
+    <p>
+      <i class="fa-solid fa-graduation-cap"></i>
+      GradPath &copy; 2024 – Helping students navigate their career path.
+    </p>
+  </footer>
+
+  <!-- =====================================================================
+       JAVASCRIPT
+       ===================================================================== -->
+  <script>
+    /* ---- Live search autocomplete ---- */
+    const searchInput    = document.getElementById('searchInput');
+    const searchDropdown = document.getElementById('searchDropdown');
+    let debounceTimer;
+
+    searchInput.addEventListener('input', () => {
+      clearTimeout(debounceTimer);
+      const q = searchInput.value.trim();
+
+      if (q.length < 2) {
+        searchDropdown.innerHTML = '';
+        searchDropdown.classList.remove('open');
+        return;
+      }
+
+      debounceTimer = setTimeout(() => {
+        fetch(`/api/search?q=${encodeURIComponent(q)}`)
+          .then(r => r.json())
+          .then(data => {
+            if (!data.length) {
+              searchDropdown.classList.remove('open');
+              return;
+            }
+
+            searchDropdown.innerHTML = data.map(item => `
+              <div class="dropdown-item" data-title="${item.major}">
+                <span class="dd-title">${item.major}</span>
+                <span class="dd-industry">${item.major_category}</span>
+                <span class="dd-salary">${item.median_salary
+                  ? '$' + Number(item.median_salary).toLocaleString() : ''}</span>
+              </div>
+            `).join('');
+
+            searchDropdown.classList.add('open');
+
+            searchDropdown.querySelectorAll('.dropdown-item').forEach(el => {
+              el.addEventListener('click', () => {
+                searchInput.value = el.dataset.title;
+                searchDropdown.classList.remove('open');
+                document.getElementById('searchForm').submit();
+              });
+            });
+          })
+          .catch(() => searchDropdown.classList.remove('open'));
+      }, 300);
+    });
+
+    document.addEventListener('click', e => {
+      if (!e.target.closest('.search-input-wrap')) {
+        searchDropdown.classList.remove('open');
+      }
+    });
+
+    /* ---- Live unemployment preview ---- */
+    const stateSelect = document.getElementById('stateSelect');
+    if (stateSelect) {
+      stateSelect.addEventListener('change', () => {
+        const stateId = stateSelect.value;
+        const hint = document.getElementById('unemploymentHint');
+        if (!stateId) { hint.textContent = ''; return; }
+
+        fetch(`/api/unemployment/${stateId}`)
+          .then(r => r.json())
+          .then(data => {
+            if (data.unemployment_rate !== undefined) {
+              hint.textContent =
+                `Latest: ${data.unemployment_rate}% (${data.year})`;
+            }
+          });
+      });
+    }
+
+    /* ---- Auto-dismiss flash messages after 5 s ---- */
+    setTimeout(() => {
+      document.querySelectorAll('.flash').forEach(el => el.remove());
+    }, 5000);
+  </script>
+
+</body>
+</html>
