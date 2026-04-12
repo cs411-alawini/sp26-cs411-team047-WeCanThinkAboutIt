@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GradPath – My Profile</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+</head>
+<body>
+
+  <!-- =====================================================================
+       NAVIGATION BAR
+       ===================================================================== -->
+  <nav class="navbar">
+    <a class="nav-brand" href="{{ url_for('index') }}">
+      <i class="fa-solid fa-graduation-cap"></i>
+      <span>GradPath</span>
+    </a>
+
+    <div class="nav-actions">
+      {% if user_profile %}
+        <span class="nav-user-email">{{ user_profile.email }}</span>
+        <a href="{{ url_for('logout') }}" class="btn btn-outline-white btn-sm">
+          <i class="fa-solid fa-right-from-bracket"></i> Logout
+        </a>
+      {% endif %}
+      <a href="{{ url_for('index') }}" class="btn btn-outline-white btn-sm">
+        <i class="fa-solid fa-house"></i> Dashboard
+      </a>
+    </div>
+  </nav>
+
+  <!-- =====================================================================
+       FLASH MESSAGES
+       ===================================================================== -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-container">
+        {% for category, message in messages %}
+          <div class="flash flash-{{ category }}">
+            <i class="fa-solid
+              {% if category == 'success' %}fa-circle-check
+              {% elif category == 'error' %}fa-circle-xmark
+              {% else %}fa-circle-info{% endif %}"></i>
+            {{ message }}
+            <button class="flash-close" onclick="this.parentElement.remove()">×</button>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <!-- =====================================================================
+       PAGE HEADER
+       ===================================================================== -->
+  <div class="page-header">
+    <div class="page-header-inner">
+      <div class="page-header-icon">
+        <i class="fa-solid fa-user-pen"></i>
+      </div>
+      <div>
+        <h1>
+          {% if user_profile %}Edit Profile{% else %}Create Your Profile{% endif %}
+        </h1>
+        <p>
+          {% if user_profile %}
+            Update your academic details and job preferences.
+          {% else %}
+            Get started by filling in your details to receive personalised career recommendations.
+          {% endif %}
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- =====================================================================
+       MAIN CONTENT
+       ===================================================================== -->
+  <main class="profile-page-main">
+
+    <!-- =================================================================
+         SECTION 1 – USER PROFILE FORM
+         ================================================================= -->
+    <section class="card profile-form-card">
+      <div class="card-header">
+        <i class="fa-solid fa-id-card"></i>
+        <h2>Academic Profile</h2>
+      </div>
+
+      <form
+        action="{% if user_profile %}{{ url_for('update_profile') }}{% else %}{{ url_for('create_profile') }}{% endif %}"
+        method="POST"
+        id="profileForm"
+      >
+        <div class="form-grid">
+
+          <!-- Email -->
+          <div class="form-group">
+            <label for="email">
+              <i class="fa-solid fa-envelope"></i> Email Address
+            </label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              class="form-control"
+              placeholder="you@university.edu"
+              value="{{ user_profile.email if user_profile else '' }}"
+              required
+            />
+          </div>
+
+          <!-- Major -->
+          <div class="form-group">
+            <label for="major_id">
+              <i class="fa-solid fa-book"></i> Major
+            </label>
+            <select id="major_id" name="major_id" class="form-control">
+              <option value="">— Select Major —</option>
+              {% for m in majors %}
+                <option value="{{ m.major_ID }}"
+                  {% if user_profile and user_profile.major_ID == m.major_ID %}selected{% endif %}>
+                  {{ m.major_name }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- University -->
+          <div class="form-group">
+            <label for="university_id">
+              <i class="fa-solid fa-university"></i> University
+            </label>
+            <select id="university_id" name="university_id" class="form-control">
+              <option value="">— Select University —</option>
+              {% for u in universities %}
+                <option value="{{ u.university_ID }}"
+                  {% if user_profile and user_profile.university_ID == u.university_ID %}selected{% endif %}>
+                  {{ u.university_name }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- Graduation Year -->
+          <div class="form-group">
+            <label for="grad_year">
+              <i class="fa-solid fa-calendar-days"></i> Graduation Year
+            </label>
+            <select id="grad_year" name="grad_year" class="form-control">
+              <option value="">— Select Year —</option>
+              {% for yr in range(2020, 2032) %}
+                <option value="{{ yr }}"
+                  {% if user_profile and user_profile.grad_year == yr %}selected{% endif %}>
+                  {{ yr }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- Degree Level -->
+          <div class="form-group">
+            <label for="degree_level">
+              <i class="fa-solid fa-certificate"></i> Degree Level
+            </label>
+            <select id="degree_level" name="degree_level" class="form-control">
+              <option value="">— Select Degree —</option>
+              {% for deg in ["Associate", "Bachelor's", "Master's", "PhD", "Professional"] %}
+                <option value="{{ deg }}"
+                  {% if user_profile and user_profile.degree_level == deg %}selected{% endif %}>
+                  {{ deg }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+
+        </div><!-- /.form-grid -->
+
+        <!-- Action buttons -->
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">
+            <i class="fa-solid {% if user_profile %}fa-floppy-disk{% else %}fa-plus{% endif %}"></i>
+            {% if user_profile %}Save Changes{% else %}Create Profile{% endif %}
+          </button>
+
+          {% if user_profile %}
+          <button
+            type="button"
+            class="btn btn-danger"
+            onclick="document.getElementById('deleteModal').style.display='flex'"
+          >
+            <i class="fa-solid fa-trash"></i> Delete Profile
+          </button>
+          {% endif %}
+        </div>
+      </form>
+    </section>
+
+    <!-- =================================================================
+         SECTION 2 – PREFERENCE PRESETS (only shown when a profile exists)
+         ================================================================= -->
+    {% if user_profile %}
+    <section class="card presets-card">
+      <div class="card-header">
+        <i class="fa-solid fa-sliders"></i>
+        <h2>Job Preferences</h2>
+      </div>
+      <p class="card-subtitle">
+        Save preferences to personalise your job recommendations on the dashboard.
+      </p>
+
+      <!-- Add new preset form -->
+      <form action="{{ url_for('create_preset') }}" method="POST" class="preset-form">
+        <div class="form-grid">
+
+          <!-- Expected Salary -->
+          <div class="form-group">
+            <label for="expected_salary">
+              <i class="fa-solid fa-dollar-sign"></i> Expected Salary (USD/yr)
+            </label>
+            <input
+              type="number"
+              id="expected_salary"
+              name="expected_salary"
+              class="form-control"
+              placeholder="e.g. 75000"
+              min="0"
+            />
+          </div>
+
+          <!-- Max Unemployment Rate -->
+          <div class="form-group">
+            <label for="max_unemployment">
+              <i class="fa-solid fa-chart-line"></i> Max Unemployment Rate (%)
+            </label>
+            <input
+              type="number"
+              id="max_unemployment"
+              name="max_unemployment"
+              class="form-control"
+              placeholder="e.g. 5.0"
+              min="0"
+              max="100"
+              step="0.1"
+            />
+          </div>
+
+          <!-- Preferred Industry -->
+          <div class="form-group">
+            <label for="industry_id">
+              <i class="fa-solid fa-industry"></i> Preferred Industry
+            </label>
+            <select id="industry_id" name="industry_id" class="form-control">
+              <option value="">— Any Industry —</option>
+              {% for ind in industries %}
+                <option value="{{ ind.industry_ID }}">{{ ind.industry_name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- Preferred State -->
+          <div class="form-group">
+            <label for="state_id">
+              <i class="fa-solid fa-location-dot"></i> Preferred State
+            </label>
+            <select id="state_id" name="state_id" class="form-control" id="stateSelect">
+              <option value="">— Any State —</option>
+              {% for s in states %}
+                <option value="{{ s.state_ID }}">{{ s.state_name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+        </div><!-- /.form-grid -->
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-secondary">
+            <i class="fa-solid fa-floppy-disk"></i> Save Preset
+          </button>
+        </div>
+      </form>
+
+      <!-- Saved presets list -->
+      {% if presets %}
+      <div class="presets-list">
+        <h3 class="presets-list-title">
+          <i class="fa-solid fa-list-check"></i> Saved Presets
+        </h3>
+        <div class="presets-grid">
+          {% for p in presets %}
+          <div class="preset-card">
+            <div class="preset-info">
+              <div class="preset-detail">
+                <i class="fa-solid fa-dollar-sign"></i>
+                <span>
+                  {% if p.expected_salary %}
+                    ${{ "{:,.0f}".format(p.expected_salary) }}/yr
+                  {% else %}Any salary{% endif %}
+                </span>
+              </div>
+              <div class="preset-detail">
+                <i class="fa-solid fa-chart-line"></i>
+                <span>
+                  {% if p.max_unemployment %}
+                    ≤{{ p.max_unemployment }}% unemployment
+                  {% else %}Any rate{% endif %}
+                </span>
+              </div>
+              <div class="preset-detail">
+                <i class="fa-solid fa-industry"></i>
+                <span>{{ p.industry_name or 'Any industry' }}</span>
+              </div>
+              <div class="preset-detail">
+                <i class="fa-solid fa-location-dot"></i>
+                <span>{{ p.state_name or 'Any state' }}</span>
+              </div>
+            </div>
+            <form action="{{ url_for('delete_preset', preset_id=p.preset_ID) }}" method="POST">
+              <button type="submit" class="btn btn-danger btn-sm" title="Delete preset">
+                <i class="fa-solid fa-trash"></i>
+              </button>
+            </form>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% else %}
+      <div class="presets-empty">
+        <i class="fa-solid fa-bookmark"></i>
+        <p>No presets saved yet. Fill in the form above to add one.</p>
+      </div>
+      {% endif %}
+
+    </section>
+    {% endif %}
+
+  </main>
+
+  <!-- =====================================================================
+       DELETE CONFIRMATION MODAL
+       ===================================================================== -->
+  {% if user_profile %}
+  <div class="modal-overlay" id="deleteModal">
+    <div class="modal">
+      <div class="modal-icon">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+      </div>
+      <h3>Delete Profile?</h3>
+      <p>
+        This will permanently delete your profile and all saved preferences.
+        This action cannot be undone.
+      </p>
+      <div class="modal-actions">
+        <button
+          class="btn btn-ghost"
+          onclick="document.getElementById('deleteModal').style.display='none'"
+        >
+          Cancel
+        </button>
+        <form action="{{ url_for('delete_profile') }}" method="POST">
+          <button type="submit" class="btn btn-danger">
+            <i class="fa-solid fa-trash"></i> Yes, Delete
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- =====================================================================
+       FOOTER
+       ===================================================================== -->
+  <footer class="footer">
+    <p>
+      <i class="fa-solid fa-graduation-cap"></i>
+      GradPath &copy; 2024 – Helping students navigate their career path.
+    </p>
+  </footer>
+
+  <!-- =====================================================================
+       JAVASCRIPT
+       ===================================================================== -->
+  <script>
+    // Auto-dismiss flash messages after 5 s
+    setTimeout(() => {
+      document.querySelectorAll('.flash').forEach(el => el.remove());
+    }, 5000);
+
+    // Close modal on overlay click
+    document.getElementById && document.getElementById('deleteModal') &&
+      document.getElementById('deleteModal').addEventListener('click', function(e) {
+        if (e.target === this) this.style.display = 'none';
+      });
+
+    // Fetch unemployment rate when a state is selected to give a live preview
+    const stateSelect = document.getElementById('stateSelect');
+    if (stateSelect) {
+      stateSelect.addEventListener('change', () => {
+        const stateId = stateSelect.value;
+        if (!stateId) return;
+        fetch(`/api/unemployment/${stateId}`)
+          .then(r => r.json())
+          .then(data => {
+            if (data.unemployment_rate !== undefined) {
+              const hint = document.getElementById('unemploymentHint');
+              if (hint) {
+                hint.textContent =
+                  `Latest rate for ${data.state_name}: ${data.unemployment_rate}% (${data.year})`;
+                hint.style.display = 'block';
+              }
+            }
+          });
+      });
+    }
+  </script>
+
+</body>
+</html>
