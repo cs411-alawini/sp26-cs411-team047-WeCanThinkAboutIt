@@ -16,6 +16,7 @@ app.secret_key = "gradpath_secret_key_2024"
 # ---------------------------------------------------------------------------
 DB_CONFIG = {
     "host": "34.61.85.176",
+    
     "database": "gradpath",
     "user": "root",
     "password": "root123456",
@@ -253,6 +254,7 @@ def profile():
         presets = query_db(
             """
             SELECT pp.preset_ID, pp.expected_salary, pp.max_unemployment,
+                   pp.industry_ID, pp.state_ID,   
                    i.industry_name, l.state_name
             FROM   PREFERENCE_PRESET pp
             LEFT JOIN INDUSTRY  i ON pp.industry_ID = i.industry_ID
@@ -380,7 +382,7 @@ def delete_profile():
 
 
 # ---------------------------------------------------------------------------
-# Route: Preference Presets – Create / Delete
+# Route: Preference Presets -CRUD
 # ---------------------------------------------------------------------------
 
 @app.route("/preset/create", methods=["POST"])
@@ -412,7 +414,34 @@ def create_preset():
 
     return redirect(url_for("profile"))
 
+@app.route("/preset/update/<int:preset_id>", methods=["POST"])
+def update_preset(preset_id):
+    """Update an existing preference preset."""
+    user_id = session.get("user_id")
+    if not user_id:
+        return redirect(url_for("profile"))
 
+    expected_salary = request.form.get("expected_salary") or None
+    max_unemployment = request.form.get("max_unemployment") or None
+    industry_id = request.form.get("industry_id") or None
+    state_id = request.form.get("state_id") or None
+
+    result = execute_db(
+        """
+        UPDATE PREFERENCE_PRESET
+        SET    industry_ID = %s, state_ID = %s, 
+               expected_salary = %s, max_unemployment = %s
+        WHERE  preset_ID = %s AND user_profile_ID = %s
+        """,
+        (industry_id, state_id, expected_salary, max_unemployment, preset_id, user_id),
+    )
+
+    if result is not None:
+        flash("Preset updated!", "success")
+    else:
+        flash("Failed to update preset.", "error")
+
+    return redirect(url_for("profile"))
 @app.route("/preset/delete/<int:preset_id>", methods=["POST"])
 def delete_preset(preset_id):
     """Delete a specific preference preset."""
