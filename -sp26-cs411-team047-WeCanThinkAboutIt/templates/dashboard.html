@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GradPath – Analytics Dashboard</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
+  <style>
+    /* ── Dashboard layout ── */
+    .dash-header {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 60%, #0f3460 100%);
+      padding: 2.2rem 2rem 1.8rem;
+      display: flex; align-items: center; gap: 1rem;
+    }
+    .dash-header-icon {
+      width: 48px; height: 48px; background: rgba(255,255,255,.12);
+      border-radius: 12px; display: flex; align-items: center;
+      justify-content: center; font-size: 1.4rem; color: #fff;
+    }
+    .dash-header h1 { color: #fff; font-size: 1.6rem; margin: 0; }
+    .dash-header p  { color: rgba(255,255,255,.65); font-size: .85rem; margin: .2rem 0 0; }
+
+    .dash-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.4rem;
+      padding: 1.6rem 2rem 2rem;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    .dash-card.wide { grid-column: 1 / -1; }
+
+    .dash-card {
+      background: #fff; border-radius: 14px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.07);
+      overflow: hidden; display: flex; flex-direction: column;
+    }
+    .dash-card-header {
+      padding: 1rem 1.3rem .7rem;
+      border-bottom: 1px solid #f0f0f0;
+      display: flex; align-items: center; gap: .6rem;
+    }
+    .dash-card-header i {
+      width: 32px; height: 32px; background: #eef2ff;
+      border-radius: 8px; display: flex; align-items: center;
+      justify-content: center; color: #4f46e5; font-size: .9rem;
+    }
+    .dash-card-header h3 { margin: 0; font-size: 1rem; color: #1e293b; }
+    .dash-card-header p  { margin: .1rem 0 0; font-size: .76rem; color: #94a3b8; }
+    .dash-card-body { padding: 1rem 1.2rem 1.3rem; flex: 1; position: relative; }
+
+    canvas { width: 100% !important; }
+
+    /* ── US Map styles ── */
+    .map-layout {
+      display: flex; gap: 1.2rem; align-items: flex-start;
+      padding: 1rem 1.2rem 1.3rem;
+    }
+    .map-svg-wrap { flex: 1; min-width: 0; position: relative; }
+    #usMap { width: 100%; height: auto; display: block; }
+
+    .state-path {
+      stroke: #fff; stroke-width: 0.5px;
+      cursor: pointer; transition: filter .15s;
+    }
+    .state-path:hover { filter: brightness(0.82); }
+    .state-path.selected { stroke: #1e293b; stroke-width: 2px; filter: brightness(0.88); }
+
+    /* map tooltip (hover) */
+    #mapTooltip {
+      position: fixed; pointer-events: none;
+      background: rgba(15,20,40,.9); color: #fff;
+      padding: .45rem .75rem; border-radius: 8px;
+      font-size: .8rem; white-space: nowrap;
+      opacity: 0; transition: opacity .12s;
+      z-index: 999;
+    }
+
+    /* legend bar */
+    .map-legend {
+      display: flex; align-items: center; gap: .5rem;
+      margin-top: .6rem; font-size: .75rem; color: #64748b;
+    }
+    .legend-bar {
+      height: 10px; width: 180px; border-radius: 5px;
+      background: linear-gradient(to right, #1a9850, #fee08b, #d73027);
+    }
+    .legend-labels { display: flex; justify-content: space-between; width: 180px; }
+
+    /* right panel */
+    .map-detail-panel {
+      width: 220px; flex-shrink: 0;
+      background: #f8fafc; border-radius: 12px;
+      border: 1px solid #e2e8f0;
+      padding: 1.1rem 1rem;
+      min-height: 260px;
+      display: flex; flex-direction: column; gap: .6rem;
+    }
+    .panel-placeholder {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      color: #94a3b8; text-align: center; gap: .5rem;
+      font-size: .82rem;
+    }
+    .panel-placeholder i { font-size: 1.8rem; }
+    .panel-state-name {
+      font-size: 1.05rem; font-weight: 700; color: #1e293b; margin: 0;
+    }
+    .panel-rate {
+      font-size: 2rem; font-weight: 800; margin: .2rem 0 0;
+    }
+    .panel-label { font-size: .75rem; color: #64748b; margin: 0; }
+    .panel-badge {
+      display: inline-block; padding: .22rem .6rem;
+      border-radius: 20px; font-size: .75rem; font-weight: 600;
+      margin-top: .3rem;
+    }
+    .badge-low    { background: #dcfce7; color: #16a34a; }
+    .badge-medium { background: #fef9c3; color: #ca8a04; }
+    .badge-high   { background: #fee2e2; color: #dc2626; }
+
+    .panel-divider { border: none; border-top: 1px solid #e2e8f0; margin: .4rem 0; }
+
+    .panel-rank-row {
+      display: flex; justify-content: space-between;
+      font-size: .78rem; color: #475569;
+    }
+    .panel-rank-row span:last-child { font-weight: 600; color: #1e293b; }
+
+    @media (max-width: 900px) {
+      .dash-grid { grid-template-columns: 1fr; }
+      .dash-card.wide { grid-column: auto; }
+      .map-layout { flex-direction: column; }
+      .map-detail-panel { width: 100%; min-height: auto; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── NAV ── -->
+  <nav class="navbar">
+    <a class="nav-brand" href="{{ url_for('index') }}">
+      <i class="fa-solid fa-graduation-cap"></i><span>GradPath</span>
+    </a>
+    <div class="nav-actions">
+      <a href="{{ url_for('index') }}"   class="btn btn-outline-white btn-sm">
+        <i class="fa-solid fa-house"></i> Dashboard
+      </a>
+      <a href="{{ url_for('profile') }}" class="btn btn-outline-white btn-sm">
+        <i class="fa-solid fa-user-pen"></i> Profile
+      </a>
+    </div>
+  </nav>
+
+  <!-- ── PAGE HEADER ── -->
+  <div class="dash-header">
+    <div class="dash-header-icon"><i class="fa-solid fa-chart-column"></i></div>
+    <div>
+      <h1>Analytics Dashboard</h1>
+      <p>Live career market insights powered by real employment data</p>
+    </div>
+  </div>
+
+  <!-- ── CHART GRID ── -->
+  <div class="dash-grid">
+
+    <!-- Card 1: Salary by Category (full-width) -->
+    <div class="dash-card wide">
+      <div class="dash-card-header">
+        <i class="fa-solid fa-ranking-star"></i>
+        <div>
+          <h3>Average Salary by Major Category</h3>
+          <p>Median starting salary across all majors in each field</p>
+        </div>
+      </div>
+      <div class="dash-card-body" style="height:420px">
+        <canvas id="chartCategory"></canvas>
+      </div>
+    </div>
+
+    <!-- Card 2: Unemployment trend -->
+    <div class="dash-card">
+      <div class="dash-card-header">
+        <i class="fa-solid fa-chart-line"></i>
+        <div>
+          <h3>National Unemployment Trend</h3>
+          <p>US average unemployment rate 2000 – 2025</p>
+        </div>
+      </div>
+      <div class="dash-card-body" style="height:320px">
+        <canvas id="chartTrend"></canvas>
+      </div>
+    </div>
+
+    <!-- Card 3: Salary distribution donut -->
+    <div class="dash-card">
+      <div class="dash-card-header">
+        <i class="fa-solid fa-circle-half-stroke"></i>
+        <div>
+          <h3>Salary Distribution</h3>
+          <p>How majors are spread across salary brackets</p>
+        </div>
+      </div>
+      <div class="dash-card-body"
+           style="height:320px;display:flex;align-items:center;justify-content:center">
+        <canvas id="chartDist" style="max-width:320px;max-height:300px"></canvas>
+      </div>
+    </div>
+
+    <!-- Card 4: Interactive US Unemployment Map (full-width) -->
+    <div class="dash-card wide">
+      <div class="dash-card-header">
+        <i class="fa-solid fa-map-location-dot"></i>
+        <div>
+          <h3>State Unemployment Rate — 2024</h3>
+          <p>Click any state to see its annual average unemployment rate</p>
+        </div>
+      </div>
+
+      <div class="map-layout">
+        <!-- SVG map -->
+        <div class="map-svg-wrap">
+          <svg id="usMap" viewBox="0 0 960 600"></svg>
+          <div class="map-legend">
+            <span>Low</span>
+            <div>
+              <div class="legend-bar"></div>
+              <div class="legend-labels"><span>~1.8%</span><span>~5.8%</span></div>
+            </div>
+            <span>High</span>
+          </div>
+        </div>
+
+        <!-- Detail panel -->
+        <div class="map-detail-panel" id="statePanel">
+          <div class="panel-placeholder" id="panelPlaceholder">
+            <i class="fa-regular fa-hand-pointer"></i>
+            <span>Click a state on the map to see its unemployment details</span>
+          </div>
+          <div id="panelContent" style="display:none; flex-direction:column; gap:.5rem;">
+            <p class="panel-state-name" id="panelStateName"></p>
+            <div>
+              <p class="panel-rate" id="panelRate"></p>
+              <p class="panel-label">2024 avg unemployment rate</p>
+            </div>
+            <span class="panel-badge" id="panelBadge"></span>
+            <hr class="panel-divider" />
+            <div class="panel-rank-row">
+              <span>National rank</span>
+              <span id="panelRank"></span>
+            </div>
+            <div class="panel-rank-row">
+              <span>vs. national avg</span>
+              <span id="panelVsAvg"></span>
+            </div>
+            <div class="panel-rank-row">
+              <span>Data year</span>
+              <span>2024</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /.dash-grid -->
+
+  <!-- hover tooltip -->
+  <div id="mapTooltip"></div>
+
+  <footer class="footer">
+    <p>
+      <i class="fa-solid fa-graduation-cap"></i>
+      GradPath &copy; 2024 – Helping students navigate their career path.
+    </p>
+  </footer>
+
+  <!-- ============================================================
+       SCRIPTS
+       ============================================================ -->
+  <script>
+    /* ── data from Flask ── */
+    const catData     = {{ chart_categories   | safe }};
+    const trendData   = {{ chart_unemp_trend  | safe }};
+    const distData    = {{ chart_salary_dist  | safe }};
+    const stateData   = {{ chart_state_unemp  | safe }};
+
+    const PALETTE = [
+      '#4f46e5','#7c3aed','#2563eb','#0891b2','#059669',
+      '#d97706','#dc2626','#db2777','#9333ea','#16a34a',
+      '#ea580c','#0284c7','#6d28d9','#be185d','#0d9488','#65a30d'
+    ];
+
+    /* ─────────────────────────────────────────────
+       Chart 1 – horizontal bar: salary by category
+       ───────────────────────────────────────────── */
+    new Chart(document.getElementById('chartCategory'), {
+      type: 'bar',
+      data: {
+        labels: catData.map(d => d.major_category),
+        datasets: [
+          {
+            label: 'Avg Median Salary ($)',
+            data: catData.map(d => d.avg_salary),
+            backgroundColor: catData.map((_, i) => PALETTE[i % PALETTE.length] + 'cc'),
+            borderColor:     catData.map((_, i) => PALETTE[i % PALETTE.length]),
+            borderWidth: 1, borderRadius: 5, yAxisID: 'ySalary',
+          },
+          {
+            label: 'Avg Unemployment (%)',
+            data: catData.map(d => d.avg_unemp),
+            type: 'line',
+            borderColor: '#f59e0b', backgroundColor: 'transparent',
+            pointBackgroundColor: '#f59e0b', pointRadius: 4,
+            tension: 0.3, yAxisID: 'yUnemp',
+          }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'top' },
+          tooltip: {
+            callbacks: {
+              label: ctx => ctx.datasetIndex === 0
+                ? ` $${ctx.parsed.y.toLocaleString()}` : ` ${ctx.parsed.y}%`
+            }
+          }
+        },
+        scales: {
+          x: { ticks: { maxRotation: 30, font: { size: 11 } } },
+          ySalary: {
+            type: 'linear', position: 'left',
+            ticks: { callback: v => '$' + (v/1000).toFixed(0) + 'K' },
+            grid: { color: '#f1f5f9' }
+          },
+          yUnemp: {
+            type: 'linear', position: 'right',
+            ticks: { callback: v => v + '%' },
+            grid: { drawOnChartArea: false }
+          }
+        }
+      }
+    });
+
+    /* ─────────────────────────────────────────
+       Chart 2 – line: unemployment trend
+       ───────────────────────────────────────── */
+    new Chart(document.getElementById('chartTrend'), {
+      type: 'line',
+      data: {
+        labels: trendData.map(d => d.year),
+        datasets: [{
+          label: 'Avg Unemployment Rate (%)',
+          data: trendData.map(d => d.avg_rate),
+          borderColor: '#4f46e5', backgroundColor: 'rgba(79,70,229,.08)',
+          fill: true, tension: 0.3, pointRadius: 3, pointHoverRadius: 5,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.y}%` } }
+        },
+        scales: {
+          y: { ticks: { callback: v => v + '%' }, grid: { color: '#f1f5f9' } },
+          x: { grid: { display: false } }
+        }
+      }
+    });
+
+    /* ─────────────────────────────────────
+       Chart 3 – donut: salary distribution
+       ───────────────────────────────────── */
+    new Chart(document.getElementById('chartDist'), {
+      type: 'doughnut',
+      data: {
+        labels: distData.map(d => d.bucket),
+        datasets: [{
+          data: distData.map(d => d.cnt),
+          backgroundColor: ['#818cf8','#4f46e5','#2563eb','#0891b2','#059669'],
+          borderWidth: 2, borderColor: '#fff', hoverOffset: 8,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: '62%',
+        plugins: {
+          legend: { position: 'right', labels: { boxWidth: 14, font: { size: 12 } } },
+          tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.parsed} majors` } }
+        }
+      }
+    });
+
+    /* ─────────────────────────────────────────────────────────
+       Chart 4 – D3 choropleth: US unemployment map
+       ───────────────────────────────────────────────────────── */
+
+    // Build state-name → rate lookup
+    const rateByState = {};
+    stateData.forEach(d => { rateByState[d.state_name] = d.avg_rate; });
+
+    // Sorted rates for national rank calculation
+    const sortedRates = [...stateData].sort((a, b) => b.avg_rate - a.avg_rate);
+    const rankByState = {};
+    sortedRates.forEach((d, i) => { rankByState[d.state_name] = i + 1; });
+
+    const nationalAvg = +(stateData.reduce((s, d) => s + d.avg_rate, 0) / stateData.length).toFixed(2);
+
+    // FIPS id → state name (matches us-atlas TopoJSON ids)
+    const fipsToName = {
+      "01":"Alabama","02":"Alaska","04":"Arizona","05":"Arkansas",
+      "06":"California","08":"Colorado","09":"Connecticut","10":"Delaware",
+      "11":"District of Columbia","12":"Florida","13":"Georgia","15":"Hawaii",
+      "16":"Idaho","17":"Illinois","18":"Indiana","19":"Iowa","20":"Kansas",
+      "21":"Kentucky","22":"Louisiana","23":"Maine","24":"Maryland",
+      "25":"Massachusetts","26":"Michigan","27":"Minnesota","28":"Mississippi",
+      "29":"Missouri","30":"Montana","31":"Nebraska","32":"Nevada",
+      "33":"New Hampshire","34":"New Jersey","35":"New Mexico","36":"New York",
+      "37":"North Carolina","38":"North Dakota","39":"Ohio","40":"Oklahoma",
+      "41":"Oregon","42":"Pennsylvania","44":"Rhode Island","45":"South Carolina",
+      "46":"South Dakota","47":"Tennessee","48":"Texas","49":"Utah","50":"Vermont",
+      "51":"Virginia","53":"Washington","54":"West Virginia","55":"Wisconsin",
+      "56":"Wyoming"
+    };
+
+    // Color scale: green (low) → yellow → red (high)
+    const minRate = 1.5, maxRate = 6.0;
+    const colorScale = d3.scaleSequential()
+      .domain([minRate, maxRate])
+      .interpolator(t => d3.interpolateRdYlGn(1 - t)); // reversed: green=low
+
+    const tooltip = document.getElementById('mapTooltip');
+    let selectedPath = null;
+
+    async function drawMap() {
+      const us = await d3.json(
+        "https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json"
+      );
+      const states = topojson.feature(us, us.objects.states);
+      const mesh   = topojson.mesh(us, us.objects.states, (a, b) => a !== b);
+
+      const svg  = d3.select('#usMap');
+      const proj = d3.geoAlbersUsa().scale(1280).translate([480, 300]);
+      const path = d3.geoPath().projection(proj);
+
+      // State fills
+      svg.selectAll('.state-path')
+        .data(states.features)
+        .join('path')
+        .attr('class', 'state-path')
+        .attr('d', path)
+        .attr('fill', d => {
+          const id   = String(d.id).padStart(2, '0');
+          const name = fipsToName[id];
+          const rate = name ? rateByState[name] : undefined;
+          return rate !== undefined ? colorScale(rate) : '#cbd5e1';
+        })
+        .on('mousemove', function(event, d) {
+          const id   = String(d.id).padStart(2, '0');
+          const name = fipsToName[id] || 'Unknown';
+          const rate = rateByState[name];
+          tooltip.style.opacity = '1';
+          tooltip.style.left = (event.clientX + 12) + 'px';
+          tooltip.style.top  = (event.clientY - 28) + 'px';
+          tooltip.textContent = rate !== undefined
+            ? `${name}: ${rate}%` : `${name}: no data`;
+        })
+        .on('mouseleave', function() {
+          tooltip.style.opacity = '0';
+        })
+        .on('click', function(event, d) {
+          // deselect previous
+          if (selectedPath) d3.select(selectedPath).classed('selected', false);
+          if (selectedPath === this) {
+            selectedPath = null;
+            showPlaceholder();
+            return;
+          }
+          selectedPath = this;
+          d3.select(this).classed('selected', true);
+
+          const id   = String(d.id).padStart(2, '0');
+          const name = fipsToName[id] || 'Unknown';
+          const rate = rateByState[name];
+          showStateDetail(name, rate);
+        });
+
+      // State borders
+      svg.append('path')
+        .datum(mesh)
+        .attr('fill', 'none')
+        .attr('stroke', '#fff')
+        .attr('stroke-width', '0.5')
+        .attr('d', path);
+    }
+
+    function showPlaceholder() {
+      document.getElementById('panelPlaceholder').style.display = 'flex';
+      document.getElementById('panelContent').style.display     = 'none';
+    }
+
+    function showStateDetail(name, rate) {
+      document.getElementById('panelPlaceholder').style.display = 'none';
+      const content = document.getElementById('panelContent');
+      content.style.display = 'flex';
+
+      document.getElementById('panelStateName').textContent = name;
+
+      const rateEl = document.getElementById('panelRate');
+      if (rate !== undefined) {
+        rateEl.textContent = rate + '%';
+        rateEl.style.color = colorScale(rate);
+      } else {
+        rateEl.textContent = 'N/A';
+        rateEl.style.color = '#94a3b8';
+      }
+
+      const badge = document.getElementById('panelBadge');
+      if (rate !== undefined) {
+        if (rate < 3.2) {
+          badge.textContent = 'Low Unemployment';
+          badge.className = 'panel-badge badge-low';
+        } else if (rate < 4.5) {
+          badge.textContent = 'Moderate';
+          badge.className = 'panel-badge badge-medium';
+        } else {
+          badge.textContent = 'High Unemployment';
+          badge.className = 'panel-badge badge-high';
+        }
+      } else {
+        badge.textContent = 'No data';
+        badge.className = 'panel-badge';
+        badge.style.background = '#f1f5f9';
+        badge.style.color = '#94a3b8';
+      }
+
+      const rank = rankByState[name];
+      document.getElementById('panelRank').textContent =
+        rank ? `#${rank} of ${stateData.length}` : '—';
+
+      if (rate !== undefined) {
+        const diff = (rate - nationalAvg).toFixed(2);
+        const diffEl = document.getElementById('panelVsAvg');
+        diffEl.textContent = (diff > 0 ? '+' : '') + diff + '%';
+        diffEl.style.color  = diff > 0 ? '#dc2626' : '#16a34a';
+      } else {
+        document.getElementById('panelVsAvg').textContent = '—';
+      }
+    }
+
+    drawMap();
+  </script>
+
+</body>
+</html>

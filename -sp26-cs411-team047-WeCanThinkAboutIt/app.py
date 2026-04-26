@@ -548,8 +548,18 @@ def api_unemployment(state_id):
 
 
 # ---------------------------------------------------------------------------
+# Route: Analytics Dashboard
+# ---------------------------------------------------------------------------
+
+@app.route("/dashboard")
+def dashboard():
+    from jack_function import get_all_dashboard_data
+    return render_template("dashboard.html", **get_all_dashboard_data())
+
+
+# ---------------------------------------------------------------------------
 # Run
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    app.run(debug=True, host="0.0.0.0", port=5005)
