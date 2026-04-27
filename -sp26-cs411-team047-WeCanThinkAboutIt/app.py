@@ -164,9 +164,6 @@ def index():
     category_filter = request.args.get("category", "").strip()
     degree_filter = request.args.get("degree", "").strip()
 
-    # Query allagesRAW for career-outcome data (clean salary & employment stats).
-    # The JOB_ROLE table's salary data is largely unusable (99 999 999.99),
-    # while allagesRAW has verified median salaries by major ($35K–$125K).
     sql = """
         SELECT a.major,
                a.major_category,
@@ -243,7 +240,7 @@ def profile():
                    up.major_ID, up.university_ID,
                    m.major_name, u.university_name
             FROM   USER_PROFILE up
-            LEFT JOIN MAJOR      m ON up.major_ID      = m.major_ID
+            LEFT JOIN MAJOR m ON up.major_ID = m.major_ID
             LEFT JOIN UNIVERSITY u ON up.university_ID = u.university_ID
             WHERE  up.user_profile_ID = %s
             """,
@@ -258,7 +255,7 @@ def profile():
                    i.industry_name, l.state_name
             FROM   PREFERENCE_PRESET pp
             LEFT JOIN INDUSTRY  i ON pp.industry_ID = i.industry_ID
-            LEFT JOIN LOCATION  l ON pp.state_ID    = l.state_ID
+            LEFT JOIN LOCATION  l ON pp.state_ID = l.state_ID
             WHERE  pp.user_profile_ID = %s
             ORDER  BY pp.preset_ID DESC
             """,
@@ -294,7 +291,6 @@ def create_profile():
         flash("Email is required.", "error")
         return redirect(url_for("profile"))
 
-    # Check for duplicate email
     existing = query_db(
         "SELECT user_profile_ID FROM USER_PROFILE WHERE email = %s",
         (email,),
@@ -363,7 +359,6 @@ def delete_profile():
         flash("No profile to delete.", "error")
         return redirect(url_for("profile"))
 
-    # Remove presets first (foreign key constraint)
     execute_db(
         "DELETE FROM PREFERENCE_PRESET WHERE user_profile_ID = %s", (user_id,)
     )
@@ -380,10 +375,6 @@ def delete_profile():
 
     return redirect(url_for("profile"))
 
-
-# ---------------------------------------------------------------------------
-# Route: Preference Presets -CRUD
-# ---------------------------------------------------------------------------
 
 @app.route("/preset/create", methods=["POST"])
 def create_preset():
@@ -458,10 +449,6 @@ def delete_preset(preset_id):
     return redirect(url_for("profile"))
 
 
-# ---------------------------------------------------------------------------
-# Route: Session helpers – switch / logout
-# ---------------------------------------------------------------------------
-
 @app.route("/login", methods=["POST"])
 def login():
     """Look up a user by email and store their ID in session."""
@@ -486,10 +473,6 @@ def logout():
     flash("Logged out.", "info")
     return redirect(url_for("index"))
 
-
-# ---------------------------------------------------------------------------
-# API: JSON endpoint for live keyword search (used by front-end JS)
-# ---------------------------------------------------------------------------
 
 @app.route("/api/search")
 def api_search():
@@ -525,13 +508,8 @@ def api_search():
     return jsonify(results)
 
 
-# ---------------------------------------------------------------------------
-# API: Unemployment data for a state
-# ---------------------------------------------------------------------------
-
 @app.route("/api/unemployment/<int:state_id>")
 def api_unemployment(state_id):
-    """Returns the most recent unemployment rate for a given state."""
     row = query_db(
         """
         SELECT u.unemployment_rate, u.year, l.state_name
@@ -547,19 +525,36 @@ def api_unemployment(state_id):
     return jsonify(row or {})
 
 
-# ---------------------------------------------------------------------------
-# Route: Analytics Dashboard
-# ---------------------------------------------------------------------------
-
 @app.route("/dashboard")
 def dashboard():
-    from jack_function import get_all_dashboard_data
-    return render_template("dashboard.html", **get_all_dashboard_data())
+    from extra_credit import get_all_dashboard_data
+    return render_template(
+        "dashboard.html",
+        user_id=session.get("user_id"),
+        **get_all_dashboard_data(),
+    )
 
 
-# ---------------------------------------------------------------------------
-# Run
-# ---------------------------------------------------------------------------
+@app.route("/api/save_state", methods=["POST"])
+def api_save_state():
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"error": "Not logged in"}), 401
+
+    data            = request.get_json() or {}
+    state_name      = data.get("state_name", "").strip()
+    year_adjustment = int(data.get("year_adjustment", 0))
+
+    if not state_name:
+        return jsonify({"error": "state_name required"}), 400
+
+    from extra_credit import save_state_preference
+    result = save_state_preference(user_id, state_name, year_adjustment)
+    status = 200 if result.get("success") else 500
+    return jsonify(result), status
+
 
 if __name__ == "__main__":
+    from extra_credit import setup_db_objects
+    setup_db_objects()
     app.run(debug=True, host="0.0.0.0", port=5005)
