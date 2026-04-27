@@ -198,11 +198,7 @@ def save_state_preference(user_id, state_name, year_adjustment):
         )
 
         # ── READ 4: career recommendations ───────────────────────────────
-        # Advanced concepts used:
-        #   • JOIN multiple relations (allagesRAW, MAJOR, LOCATION, UNEMPLOYMENT, USER_PROFILE)
-        #   • GROUP BY aggregation (AVG unemployment per state)
-        #   • Nested subquery that cannot be replaced by a JOIN:
-        #       find the latest unemployment year <= user's grad_year
+        #  find the latest unemployment year <= user's grad_year
         cursor.execute(
             """
             SELECT a.major,

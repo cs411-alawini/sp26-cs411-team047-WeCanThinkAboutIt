@@ -133,10 +133,10 @@ def index():
                    m.major_name, m.category,
                    u.university_name,
                    up.major_ID, up.university_ID
-            FROM   USER_PROFILE up
-            LEFT JOIN MAJOR      m ON up.major_ID      = m.major_ID
+            FROM USER_PROFILE up
+            LEFT JOIN MAJOR m ON up.major_ID = m.major_ID
             LEFT JOIN UNIVERSITY u ON up.university_ID = u.university_ID
-            WHERE  up.user_profile_ID = %s
+            WHERE up.user_profile_ID = %s
             """,
             (user_id,),
             fetch_one=True,
@@ -239,10 +239,10 @@ def profile():
             SELECT up.user_profile_ID, up.email, up.grad_year, up.degree_level,
                    up.major_ID, up.university_ID,
                    m.major_name, u.university_name
-            FROM   USER_PROFILE up
+            FROM USER_PROFILE up
             LEFT JOIN MAJOR m ON up.major_ID = m.major_ID
             LEFT JOIN UNIVERSITY u ON up.university_ID = u.university_ID
-            WHERE  up.user_profile_ID = %s
+            WHERE up.user_profile_ID = %s
             """,
             (user_id,),
             fetch_one=True,
@@ -253,11 +253,11 @@ def profile():
             SELECT pp.preset_ID, pp.expected_salary, pp.max_unemployment,
                    pp.industry_ID, pp.state_ID,   
                    i.industry_name, l.state_name
-            FROM   PREFERENCE_PRESET pp
+            FROM PREFERENCE_PRESET pp
             LEFT JOIN INDUSTRY  i ON pp.industry_ID = i.industry_ID
             LEFT JOIN LOCATION  l ON pp.state_ID = l.state_ID
-            WHERE  pp.user_profile_ID = %s
-            ORDER  BY pp.preset_ID DESC
+            WHERE pp.user_profile_ID = %s
+            ORDER BY pp.preset_ID DESC
             """,
             (user_id,),
         ) or []
@@ -524,6 +524,96 @@ def api_unemployment(state_id):
     )
     return jsonify(row or {})
 
+# check for functionality of this stored procedure
+def _setup_stored_procedure():
+    conn = get_db_connection()
+    if not conn:
+        print("stored procedure setup: could not connect to DB.")
+        return
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DROP PROCEDURE IF EXISTS GetMajorInsights")
+        cursor.execute(
+            """
+            CREATE PROCEDURE GetMajorInsights(IN p_category VARCHAR(100))
+            BEGIN
+                DECLARE v_category VARCHAR(100);
+
+                IF p_category IS NULL OR p_category = '' THEN
+                    SET v_category = 'Engineering';
+                ELSE
+                    SET v_category = p_category;
+                END IF;
+
+                SELECT a.major, a.major_category, a.median_salary, ROUND(a.unemployment_rate*100,2) AS unemployment_pct, a.total_students
+                FROM allagesRAW a
+                JOIN MAJOR m ON a.major = m.Major_name
+                WHERE m.Category = v_category AND a.median_salary > 0 AND a.major != 'Major'
+                ORDER BY a.median_salary DESC
+                LIMIT 10;
+
+                SELECT v_category AS category, ROUND(AVG(a.median_salary), 0) AS category_avg_salary, 
+                    (SELECT ROUND(AVG(median_salary), 0) FROM allagesRAW
+                     WHERE median_salary>0 AND major != 'Major')AS national_avg_salary, COUNT(a.major) AS total_majors
+                FROM allagesRAW a
+                JOIN MAJOR m ON a.major = m.Major_name
+                WHERE m.Category = v_category AND a.median_salary > 0 AND a.major != 'Major';
+            END
+            """
+        )
+        conn.commit()
+        print("stored procedure GetMajorInsights created successfully")
+    except Exception as e:
+        print(f"stored procedure setup error: {e}")
+        conn.rollback()
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def call_major_insights(category):
+    conn = get_db_connection()
+    if not conn:
+        return {"error": "DB connection failed"}
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.callproc("GetMajorInsights", (category,))
+        result_sets = [rs.fetchall() for rs in cursor.stored_results()]
+        majors = result_sets[0] if len(result_sets) > 0 else []
+        summary = result_sets[1][0] if len(result_sets) > 1 and result_sets[1] else {}
+        from decimal import Decimal
+        def to_native(rows):
+            return [
+                {k: float(v) if isinstance(v, Decimal) else v for k, v in row.items()}
+                for row in rows
+            ]
+        return {
+            "majors": to_native(majors),
+            "summary": {k: float(v) if isinstance(v, Decimal) else v for k, v in summary.items()},
+        }
+    except Exception as e:
+        print(f"stored procedure call error: {e}")
+        return {"error": str(e)}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.route("/api/major_insights")
+def api_major_insights():
+    category = request.args.get("category", "").strip()
+    if not category:
+        return jsonify({"error": "category parameter required"}), 400
+    result = call_major_insights(category)
+    status = 200 if "error" not in result else 500
+    return jsonify(result), status
+
+@app.route("/insights")
+def insights():
+    categories = get_categories()
+    return render_template("insights.html", categories=categories)
+
+# before SP
 
 @app.route("/dashboard")
 def dashboard():
@@ -541,8 +631,8 @@ def api_save_state():
     if not user_id:
         return jsonify({"error": "Not logged in"}), 401
 
-    data            = request.get_json() or {}
-    state_name      = data.get("state_name", "").strip()
+    data = request.get_json() or {}
+    state_name = data.get("state_name", "").strip()
     year_adjustment = int(data.get("year_adjustment", 0))
 
     if not state_name:
@@ -555,4 +645,6 @@ def api_save_state():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5005)
+    _setup_stored_procedure() #remove if feature is breaking during testing
+    app.run(debug=True, host="0.0.0.0", port=5005) #change to 8000 if needed
+

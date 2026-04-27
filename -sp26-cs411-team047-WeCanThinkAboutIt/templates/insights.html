@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GradPath – Category Insights</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <nav class="navbar">
+    <div class="nav-brand">
+      <i class="fa-solid fa-graduation-cap"></i>
+      <span>GradPath</span>
+    </div>
+    <div class="nav-actions">
+      <a href="{{ url_for('index') }}" class="btn btn-outline-white btn-sm">
+        <i class="fa-solid fa-house"></i> Home
+      </a>
+      <a href="{{ url_for('dashboard') }}" class="btn btn-outline-white btn-sm">
+        <i class="fa-solid fa-chart-column"></i> Analytics
+      </a>
+      <a href="{{ url_for('profile') }}" class="btn btn-outline-white btn-sm">
+        <i class="fa-solid fa-user-pen"></i> Profile
+      </a>
+    </div>
+  </nav>
+
+  <!-- PAGE HEADER -->
+  <section class="search-section">
+    <h1 style="margin-bottom: 0.5rem;">
+      <i class="fa-solid fa-lightbulb"></i> Category Insights
+    </h1>
+    <p style="color: #666; margin-bottom: 1.5rem;">
+      Thinking about switching majors? Select a category below to explore
+      top majors, median salaries, and how they compare to the national average.
+    </p>
+
+    <!-- Category picker -->
+    <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+      <select id="categoryPicker" class="filter-select" style="min-width: 250px;">
+        <option value="">— Select a Category —</option>
+        {% for cat in categories %}
+          <option value="{{ cat }}">{{ cat }}</option>
+        {% endfor %}
+      </select>
+      <button id="loadInsightsBtn" class="btn btn-primary">
+        <i class="fa-solid fa-magnifying-glass"></i> Get Insights
+      </button>
+    </div>
+  </section>
+
+  <!-- RESULTS (hidden until loaded) -->
+  <main class="main-content" style="display: block;">
+    <div id="insightsResults" style="display: none; width: 100%;">
+
+      <!-- Summary cards -->
+      <div id="insightsSummary"
+           style="display: flex; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 1.5rem;">
+      </div>
+
+      <!-- Results table -->
+      <section class="jobs-section">
+        <div class="jobs-header">
+          <h2>
+            <i class="fa-solid fa-chart-bar"></i>
+            Top Majors in: <span id="insightsCategoryTitle"></span>
+          </h2>
+        </div>
+        <div class="table-wrapper">
+          <table class="jobs-table">
+            <thead>
+              <tr>
+                <th class="col-rank">Rank</th>
+                <th class="col-title">Major</th>
+                <th class="col-salary">Median Salary</th>
+                <th class="col-unemp">Unemployment %</th>
+                <th>Total Students</th>
+              </tr>
+            </thead>
+            <tbody id="insightsTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- Empty state -->
+    <div id="insightsEmpty" style="text-align: center; padding: 4rem; color: #999;">
+      <i class="fa-solid fa-lightbulb" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+      <h3>Select a category to get started</h3>
+      <p>Choose a major category above to see salary and employment insights.</p>
+    </div>
+
+  </main>
+
+  <footer class="footer">
+    <p>
+      <i class="fa-solid fa-graduation-cap"></i>
+      GradPath &copy; 2024 – Helping students navigate their career path.
+    </p>
+  </footer>
+
+  <script>
+    document.getElementById('loadInsightsBtn').addEventListener('click', () => {
+      const category = document.getElementById('categoryPicker').value;
+      if (!category) return;
+
+      fetch(`/api/major_insights?category=${encodeURIComponent(category)}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.error || !data.majors) return;
+
+          document.getElementById('insightsCategoryTitle').textContent = category;
+          document.getElementById('insightsEmpty').style.display = 'none';
+
+          // Summary cards
+          const s = data.summary;
+          document.getElementById('insightsSummary').innerHTML = `
+            <div class="profile-card" style="padding:1rem; flex:1; min-width:150px;">
+              <strong>Category Avg Salary</strong><br>
+              $${Number(s.category_avg_salary).toLocaleString()}
+            </div>
+            <div class="profile-card" style="padding:1rem; flex:1; min-width:150px;">
+              <strong>National Avg Salary</strong><br>
+              $${Number(s.national_avg_salary).toLocaleString()}
+            </div>
+            <div class="profile-card" style="padding:1rem; flex:1; min-width:150px;">
+              <strong>Majors in Category</strong><br>
+              ${s.total_majors}
+            </div>
+          `;
+
+          // Table rows
+          document.getElementById('insightsTableBody').innerHTML = data.majors.map((m, i) => `
+            <tr class="job-row">
+              <td class="col-rank"><span class="rank-number">${i + 1}</span></td>
+              <td class="col-title"><span class="job-title">${m.major}</span></td>
+              <td class="col-salary">$${Number(m.median_salary).toLocaleString()}</td>
+              <td class="col-unemp">${m.unemployment_pct}%</td>
+              <td>${m.total_students ? Number(m.total_students).toLocaleString() : '—'}</td>
+            </tr>
+          `).join('');
+
+          document.getElementById('insightsResults').style.display = 'block';
+        })
+        .catch(() => {});
+    });
+  </script>
+
+</body>
+</html>
