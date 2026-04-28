@@ -954,3 +954,31 @@ ul { list-style: none; }
   .jobs-table th, .jobs-table td { padding: .65rem .85rem; }
   .col-industry { display: none; }
 }
+
+.preset-chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  padding: 0.4rem 0.6rem;
+  background: #f0f4ff;
+  border: 1px solid #c7d4f5;
+  border-radius: 8px;
+  font-size: 0.72rem;
+  color: #333;
+  cursor: pointer;
+  transition: background 0.15s;
+  text-align: left;
+  min-width: 110px;
+  max-width: 160px;
+}
+.preset-chip:hover {
+  background: #dce6ff;
+  border-color: #4a6cf7;
+}
+.preset-chip span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+}

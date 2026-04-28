@@ -11,9 +11,7 @@ from mysql.connector import Error
 app = Flask(__name__)
 app.secret_key = "gradpath_secret_key_2024"
 
-# ---------------------------------------------------------------------------
 # Database Configuration
-# ---------------------------------------------------------------------------
 DB_CONFIG = {
     "host": "34.61.85.176",
     
@@ -77,22 +75,13 @@ def execute_db(sql, params=None):
         conn.close()
 
 
-# ---------------------------------------------------------------------------
 # Helper – fetch dropdown option lists used across multiple pages
-# ---------------------------------------------------------------------------
-
 def get_majors():
     return query_db("SELECT major_ID, major_name FROM MAJOR ORDER BY major_name") or []
-
-
 def get_universities():
     return query_db("SELECT university_ID, university_name FROM UNIVERSITY ORDER BY university_name") or []
-
-
 def get_industries():
     return query_db("SELECT industry_ID, industry_name FROM INDUSTRY ORDER BY industry_name") or []
-
-
 def get_states():
     return query_db("SELECT state_ID, state_name FROM LOCATION ORDER BY state_name") or []
 
@@ -109,9 +98,7 @@ def get_categories():
     return [r["major_category"] for r in rows]
 
 
-# ---------------------------------------------------------------------------
 # Route: Home / Dashboard
-# ---------------------------------------------------------------------------
 
 @app.route("/")
 def index():
@@ -126,7 +113,6 @@ def index():
     location_name = None
 
     if user_id:
-        # Fetch the profile along with joined display names
         profile = query_db(
             """
             SELECT up.user_profile_ID, up.email, up.grad_year, up.degree_level,
@@ -142,13 +128,13 @@ def index():
             fetch_one=True,
         )
 
-        # Fetch preferred location from the most recent preference preset
         if profile:
             pref = query_db(
                 """
-                SELECT l.state_name
-                FROM   PREFERENCE_PRESET pp
+                SELECT pp.preset_ID,pp.expected_salary,pp.max_unemployment,pp.industry_ID,pp.state_ID,l.state_name,i.industry_name
+                FROM PREFERENCE_PRESET pp
                 LEFT JOIN LOCATION l ON pp.state_ID = l.state_ID
+                LEFT JOIN INDUSTRY i ON pp.industry_ID = i.industry_ID
                 WHERE  pp.user_profile_ID = %s
                 ORDER  BY pp.preset_ID DESC
                 LIMIT  1
@@ -157,6 +143,17 @@ def index():
                 fetch_one=True,
             )
             location_name = pref["state_name"] if pref else "Not set"
+            all_presets = query_db(
+                """
+                SELECT pp.preset_ID, pp.expected_salary, pp.max_unemployment,pp.industry_ID, pp.state_ID,l.state_name, i.industry_name
+                FROM PREFERENCE_PRESET pp
+                LEFT JOIN LOCATION l ON pp.state_ID = l.state_ID
+                LEFT JOIN INDUSTRY i ON pp.industry_ID = i.industry_ID
+                WHERE pp.user_profile_ID = %s
+                ORDER BY pp.preset_ID DESC
+                """,
+                (user_id,),
+            ) or []
 
     search_query = request.args.get("q", "").strip()
     major_filter = request.args.get("major", "").strip()
@@ -209,6 +206,8 @@ def index():
         "index.html",
         profile=profile,
         location_name=location_name,
+        pref=pref, #delete if not working
+        all_presets=all_presets, #delete if not working
         jobs=jobs,
         majors=majors,
         industries=industries,
@@ -222,9 +221,8 @@ def index():
     )
 
 
-# ---------------------------------------------------------------------------
+
 # Route: Profile – Create / Read / Update / Delete
-# ---------------------------------------------------------------------------
 
 @app.route("/profile", methods=["GET"])
 def profile():
@@ -254,8 +252,8 @@ def profile():
                    pp.industry_ID, pp.state_ID,   
                    i.industry_name, l.state_name
             FROM PREFERENCE_PRESET pp
-            LEFT JOIN INDUSTRY  i ON pp.industry_ID = i.industry_ID
-            LEFT JOIN LOCATION  l ON pp.state_ID = l.state_ID
+            LEFT JOIN INDUSTRY i ON pp.industry_ID = i.industry_ID
+            LEFT JOIN LOCATION l ON pp.state_ID = l.state_ID
             WHERE pp.user_profile_ID = %s
             ORDER BY pp.preset_ID DESC
             """,
@@ -336,9 +334,8 @@ def update_profile():
     result = execute_db(
         """
         UPDATE USER_PROFILE
-        SET    email = %s, major_ID = %s, university_ID = %s,
-               grad_year = %s, degree_level = %s
-        WHERE  user_profile_ID = %s
+        SET email = %s, major_ID = %s, university_ID = %s,grad_year = %s, degree_level = %s
+        WHERE user_profile_ID = %s
         """,
         (email, major_id, university_id, grad_year, degree_level, user_id),
     )
@@ -378,32 +375,115 @@ def delete_profile():
 
 @app.route("/preset/create", methods=["POST"])
 def create_preset():
-    """Create a new preference preset for the current user."""
     user_id = session.get("user_id")
     if not user_id:
         flash("Please create a profile first.", "error")
         return redirect(url_for("profile"))
 
-    expected_salary = request.form.get("expected_salary") or None
+    expected_salary  = request.form.get("expected_salary") or None
     max_unemployment = request.form.get("max_unemployment") or None
-    industry_id = request.form.get("industry_id") or None
-    state_id = request.form.get("state_id") or None
+    industry_id      = request.form.get("industry_id") or None
+    state_id         = request.form.get("state_id") or None
 
-    result = execute_db(
-        """
-        INSERT INTO PREFERENCE_PRESET
-               (user_profile_ID, industry_ID, state_ID, expected_salary, max_unemployment)
-        VALUES (%s, %s, %s, %s, %s)
-        """,
-        (user_id, industry_id, state_id, expected_salary, max_unemployment),
-    )
+    conn = get_db_connection()
+    if not conn:
+        flash("Database connection failed.", "error")
+        return redirect(url_for("index"))
 
-    if result:
-        flash("Preference preset saved!", "success")
-    else:
-        flash("Failed to save preset.", "error")
+    try:
+        conn.start_transaction(isolation_level="READ COMMITTED")
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+                """
+                DELETE FROM PREFERENCE_PRESET
+                WHERE user_profile_ID = %s
+                AND (state_ID = %s OR (state_ID IS NULL AND %s IS NULL))
+                AND (industry_ID = %s OR (industry_ID IS NULL AND %s IS NULL))
+                AND (expected_salary = %s OR (expected_salary IS NULL AND %s IS NULL))
+                AND (max_unemployment = %s OR (max_unemployment IS NULL AND %s IS NULL))
+                 """,
+                (user_id,state_id, state_id,industry_id, industry_id,expected_salary, expected_salary,
+                max_unemployment, max_unemployment)
+            )
 
-    return redirect(url_for("profile"))
+        cursor.execute(
+            """
+            INSERT INTO PREFERENCE_PRESET
+                (user_profile_ID, industry_ID, state_ID, expected_salary, max_unemployment)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            (user_id, industry_id, state_id, expected_salary, max_unemployment)
+        )
+
+        cursor.execute(
+            """
+            SELECT a.major,a.major_category,a.median_salary,
+                   ROUND(a.unemployment_rate * 100, 2) AS unemployment_pct,
+                   a.median_salary-(
+                       SELECT ROUND(AVG(median_salary), 0)
+                       FROM allagesRAW
+                       WHERE median_salary> 0 AND major != 'Major') AS salary_vs_avg
+            FROM allagesRAW a
+            JOIN MAJOR m ON a.major = m.Major_name
+            WHERE a.median_salary>0
+              AND a.major != 'Major'
+              AND (%s IS NULL OR a.median_salary >= %s)
+              AND (%s IS NULL OR ROUND(a.unemployment_rate*100,2) <= %s)
+            ORDER BY a.median_salary DESC
+            LIMIT 10
+            """,
+            (expected_salary, expected_salary, max_unemployment, max_unemployment)
+        )
+        matches = cursor.fetchall()
+
+        conn.commit()
+
+        from decimal import Decimal
+        matches = [
+            {k: float(v) if isinstance(v, Decimal) else v for k, v in row.items()}
+            for row in matches
+        ]
+        for row in matches:
+            if 'unemployment_pct' in row:
+                row['unemployment_rate'] = row.pop('unemployment_pct') / 100
+
+        flash("Preferences saved!", "success")
+        return render_template(
+            "index.html",
+            profile=query_db(
+                """
+                SELECT up.user_profile_ID, up.email, up.grad_year, up.degree_level,m.major_name, m.category, u.university_name,up.major_ID, up.university_ID
+                FROM USER_PROFILE up
+                LEFT JOIN MAJOR m ON up.major_ID = m.major_ID
+                LEFT JOIN UNIVERSITY u ON up.university_ID = u.university_ID
+                WHERE up.user_profile_ID = %s
+                """,
+                (user_id,), fetch_one=True
+            ),
+            location_name=None,
+            jobs=matches,
+            majors=get_majors(),
+            industries=get_industries(),
+            states=get_states(),
+            categories=get_categories(),
+            search_query="",
+            major_filter="",
+            year_filter="",
+            category_filter="",
+            degree_filter="",
+            preset_matches=matches,
+        )
+
+    except Exception as e:
+        conn.rollback()
+        print(f"Transaction error: {e}")
+        flash("Failed to save preferences.", "error")
+        return redirect(url_for("index"))
+    finally:
+        cursor.close()
+        conn.close()
+
+#Preset test
 
 @app.route("/preset/update/<int:preset_id>", methods=["POST"])
 def update_preset(preset_id):

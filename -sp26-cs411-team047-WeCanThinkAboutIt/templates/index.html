@@ -272,13 +272,15 @@
           <div class="pref-field">
             <label><i class="fa-solid fa-dollar-sign"></i> Expected Salary</label>
             <input type="number" name="expected_salary" class="pref-input"
-                   placeholder="e.g. 70000" min="0" />
+                   placeholder="e.g. 70000" min="0" 
+                   value="{{ pref.expected_salary if pref and pref.expected_salary else '' }}"/>
           </div>
 
           <div class="pref-field">
             <label><i class="fa-solid fa-chart-line"></i> Max Unemployment %</label>
             <input type="number" name="max_unemployment" class="pref-input"
-                   placeholder="e.g. 5.0" min="0" max="100" step="0.1" />
+                   placeholder="e.g. 5.0" min="0" max="100" step="0.1" 
+                   value="{{ pref.max_unemployment if pref and pref.max_unemployment else '' }}"/>
           </div>
 
           <div class="pref-field">
@@ -286,7 +288,9 @@
             <select name="industry_id" class="pref-input">
               <option value="">— Any Industry —</option>
               {% for ind in industries %}
-                <option value="{{ ind.industry_ID }}">{{ ind.industry_name }}</option>
+                <option value="{{ ind.industry_ID }}"
+                {% if pref and pref.industry_ID == ind.industry_ID %}selected{% endif %}>
+                >{{ ind.industry_name }}</option>
               {% endfor %}
             </select>
           </div>
@@ -296,7 +300,10 @@
             <select name="state_id" class="pref-input" id="stateSelect">
               <option value="">— Any State —</option>
               {% for s in states %}
-                <option value="{{ s.state_ID }}">{{ s.state_name }}</option>
+                <option value="{{ s.state_ID }}"
+                {% if pref and pref.state_ID == s.state_ID %}selected{% endif %}>
+                >{{ s.state_name }}
+              </option>
               {% endfor %}
             </select>
             <!-- Populated by JS when a state is selected -->
@@ -307,6 +314,27 @@
             <i class="fa-solid fa-floppy-disk"></i> Save Preferences
           </button>
         </form>
+
+        {% if all_presets %}
+        <div style="margin-top: 1rem; padding-bottom: 1rem;">
+          <p style="font-size: 0.75rem; color: #888; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">
+            <i class="fa-solid fa-bookmark"></i> Saved Presets
+          </p>
+          <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center;">
+            {% for p in all_presets %}
+            <button
+              type="button"
+              class="preset-chip"
+              onclick="loadPreset({{ p.expected_salary or 'null' }}, {{ p.max_unemployment or 'null' }}, '{{ p.industry_ID or '' }}', '{{ p.state_ID or '' }}')"
+              title="💰 ${{ '{:,.0f}'.format(p.expected_salary) if p.expected_salary else 'Any' }} | 📉 {{ p.max_unemployment ~ '%' if p.max_unemployment else 'Any' }} | 🏭 {{ p.industry_name or 'Any' }} | 📍 {{ p.state_name or 'Any' }}"
+            >
+            Preset {{ loop.index }}
+            </button>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+
       </div><!-- /.pref-panel -->
       {% endif %}
 
@@ -502,6 +530,21 @@
 //Test
 
 //Test
+function loadPreset(salary, unemployment, industryId, stateId) {
+  const salaryInput = document.querySelector('input[name="expected_salary"]');
+  if (salaryInput) salaryInput.value = salary !== null ? salary : '';
+
+  const unempInput = document.querySelector('input[name="max_unemployment"]');
+  if (unempInput) unempInput.value = unemployment !== null ? unemployment : '';
+
+  const industrySelect = document.querySelector('select[name="industry_id"]');
+  if (industrySelect) industrySelect.value = industryId || '';
+
+  const stateSelect = document.querySelector('select[name="state_id"]');
+  if (stateSelect) stateSelect.value = stateId || '';
+
+  document.querySelector('.pref-panel').scrollIntoView({ behavior: 'smooth' });
+}
   </script>
 
 </body>
