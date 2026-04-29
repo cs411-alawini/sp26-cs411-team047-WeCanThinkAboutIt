@@ -111,6 +111,8 @@ def index():
     major_name = None
     university_name = None
     location_name = None
+    pref = None
+    all_presets = []
 
     if user_id:
         profile = query_db(
